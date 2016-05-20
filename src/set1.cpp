@@ -9,7 +9,13 @@
 using namespace std;
 using namespace cv;
 
-const double APPROXPOLYDP_EPS = 25.0;
+// minimum safe value times 2
+const double APPROXPOLYDP_EPS = 20.0;
+
+// strings
+const char* STR_TRIANGLE = "triangle";
+const char* STR_QUAD = "quadrilateral";
+const char* STR_UNKNOWNFIG = "UNKNOWN";
 
 int main (int argc, char** argv) {
 
@@ -26,8 +32,6 @@ int main (int argc, char** argv) {
 
         cout << "Found " << numberOfFiles << " files in " << argv[1] << endl;
 
-        namedWindow("PROBLEM");
-
         // counters
         unsigned quadsFound = 0;
         unsigned trianglesFound = 0;
@@ -38,10 +42,8 @@ int main (int argc, char** argv) {
                 cout << endl << "Analyzing file: " << file << endl;
                 Mat image = imread(file.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
 
-                blur(image, image, Size(3, 3), Point(-1, -1));
-
                 // invert image
-                threshold (image, image, 127, 255, THRESH_BINARY_INV);
+                threshold (image, image, 200, 255, THRESH_BINARY_INV);
 
                 // finding contours
                 vector< vector<Point> > contours;
@@ -61,18 +63,20 @@ int main (int argc, char** argv) {
                 auto numberOfSides = polygon.size();
 
                 // get figure type
-                string figureName = "UNKNOWN";
+                string figureName = "";
                 switch (numberOfSides) {
                 case 3:
-                        figureName = "triangle";
+                        figureName = STR_TRIANGLE;
                         ++trianglesFound;
                         break;
                 case 4:
-                        figureName = "quadrilateral";
+                        figureName = STR_QUAD;
                         ++quadsFound;
                         break;
                 default:
+                        figureName = STR_UNKNOWNFIG;
                         ++unknownsFound;
+
                 }
 
                 cout << "\tShape found: " << figureName << endl;
