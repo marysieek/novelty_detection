@@ -1,15 +1,29 @@
-#include <iostream>
-#include <string>
-#include <vector>
+# include <iostream>
+# include <string>
+# include <vector>
 
 # include "opencv2/opencv_modules.hpp"
 # include "opencv2/core/core.hpp"
 # include "opencv2/features2d/features2d.hpp"
 # include "opencv2/highgui/highgui.hpp"
+# include "opencv2/imgproc/imgproc.hpp"
 # include "opencv2/nonfree/features2d.hpp"
 
 using namespace std;
 using namespace cv;
+
+// acceptable value of matches, determined by trial and error
+const int ACCEPTABLE_MATCH = 52;
+
+// determine min hessian value
+const int MIN_HESSIAN = 1000;
+
+// distance coefficient, determined by trial and error
+const double DIST_COEFF = 0.7;
+
+// max and min values of non black pixels, determined by trial and error
+const int NON_BLACK_MAX = 3562;
+const int NON_BLACK_MIN = 85;
 
 int main( int argc, char** argv )
 {
@@ -32,23 +46,28 @@ int main( int argc, char** argv )
   cout << "Found " << numberOfFilesInDir2 << " files in " << argv[2] << endl;
 
   // detect the keypoints using SURF Detector
-  int minHessian = 400;
-
-  SurfFeatureDetector detector(minHessian);
+  SurfFeatureDetector detector(MIN_HESSIAN);
 
   vector<KeyPoint> keypoints_1, keypoints_2;
 
-  // iterate over images found in testing or novelty directory
+  // initialize counter for photos
+  int matchingPhotosCount = 0;
 
+  // number of pixels that are not black in photo
+  vector<Point> nonBlackPixels;
+
+  // count matches after using FLANN method
+  vector<int> matchesCount;
+
+  // iterate over images found in testing or novelty directory
   for (auto file : fileNamesInDir2) {
     cout << endl << "Analyzing file: " << file << endl;
     Mat image = imread(file.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
-    vector<int> matchesCount;
 
+    // clear vector values
     matchesCount.clear();
 
     // iterate over images found in training directory
-
     for (auto testFile : fileNamesInDir1) {
 
       Mat testImage = imread(testFile.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
@@ -65,30 +84,35 @@ int main( int argc, char** argv )
 
       // match descriptor vectors using FLANN matcher
       FlannBasedMatcher matcher;
-      vector< DMatch > matches;
-      matcher.match(descriptors_1, descriptors_2, matches);
+      vector< vector<DMatch> > matches;
+      matcher.knnMatch(descriptors_1, descriptors_2, matches, 2);
 
-      double max_dist = 0; double min_dist = 100;
+      // max and min distance between keypoints
+      int max_dist = 0;
+      int min_dist = 100;
 
       // calculate max and min distances between keypoints
-      for( int i = 0; i < descriptors_1.rows; i++ ) {
-        double dist = matches[i].distance;
+      for(int i = 0; i < descriptors_1.rows; i++) {
+        double dist = matches[i][0].distance;
         if( dist < min_dist ) min_dist = dist;
         if( dist > max_dist ) max_dist = dist;
       }
 
-      vector< DMatch > good_matches;
+      vector<DMatch> good_matches;
 
-      for( int i = 0; i < descriptors_1.rows; i++ ) {
-        if( matches[i].distance <= max(2*min_dist, 0.02) ) {
-          good_matches.push_back(matches[i]);
+      for(int i = 0; i < descriptors_1.rows; i++) {
+        const DMatch &m1 = matches[i][0];
+        const DMatch &m2 = matches[i][1];
+
+        if (m1.distance <= DIST_COEFF * m2.distance) {
+          good_matches.push_back(m1);
         }
       }
 
       matchesCount.push_back(good_matches.size());
     }
 
-    // calculat smallest and largest number of matches
+    // calculate smallest and largest number of matches
     int smallestNumOfMatches = *min_element(matchesCount.begin(), matchesCount.end());
     int largestNumOfMatches = *max_element(matchesCount.begin(), matchesCount.end());
 
@@ -105,9 +129,40 @@ int main( int argc, char** argv )
     // display smallest and largest number of matches
     cout << "Smallest number of matches: " << smallestNumOfMatches << endl;
     cout << "Largest number of matches: " << largestNumOfMatches << endl;
+
+    // implement matching by red colour
+    Mat1b mask1, mask2;
+    Mat3b hsv;
+
+    Mat3b imageBgr = imread(file.c_str());
+    cvtColor(imageBgr, hsv, COLOR_BGR2HSV);
+
+    // determine range of redness
+    inRange(hsv, Scalar(0, 70, 50), Scalar(10, 255, 255), mask1);
+    inRange(hsv, Scalar(120, 70, 50), Scalar(210, 255, 255), mask2);
+
+    Mat1b mask = mask1 | mask2;
+
+    // find nonzero pixels
+    findNonZero(mask, nonBlackPixels);
+
+    cout << "Largest number of matches: " << largestNumOfMatches << endl;
+    cout << "Amount of nonBlackPixels: " << nonBlackPixels.size() << endl;
+
+    if (largestNumOfMatches >= ACCEPTABLE_MATCH &&
+      (nonBlackPixels.size() >= NON_BLACK_MIN) &&
+      (nonBlackPixels.size() <= NON_BLACK_MAX)) {
+
+      matchingPhotosCount++;
+    }
+
+    cout << "Photos matching: " << matchingPhotosCount << "/" << fileNamesInDir2.size() << endl;
   }
+
+  cout << "Total photos matching: " << matchingPhotosCount << "/" << fileNamesInDir2.size() << endl;
 
   waitKey(0);
 
   return 0;
 }
+
