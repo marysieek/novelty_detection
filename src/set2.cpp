@@ -1,6 +1,7 @@
 # include <iostream>
 # include <string>
 # include <vector>
+# include <sstream>
 
 # include "opencv2/opencv_modules.hpp"
 # include "opencv2/core/core.hpp"
@@ -59,32 +60,59 @@ int main( int argc, char** argv )
   // count matches after using FLANN method
   vector<int> matchesCount;
 
-  // iterate over images found in testing or novelty directory
-  for (auto file : fileNamesInDir2) {
-    cout << endl << "Analyzing file: " << file << endl;
+  Mat descriptors_1, descriptors_2;
+
+  // calculate descriptors (feature vectors)
+  SurfDescriptorExtractor extractor;
+  FileStorage store("template.xml", FileStorage::WRITE);
+
+  int counter = 0;
+
+  // iterate over images found in training directory
+  for (auto file : fileNamesInDir1) {
+    ostringstream outputName;
+
+    counter++;
     Mat image = imread(file.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
 
-    // clear vector values
+    detector.detect(image, keypoints_1);
+    extractor.compute(image, keypoints_1, descriptors_1);
+
+    outputName << "descriptors_" << counter;
+
+    write(store, outputName.str(), descriptors_1);
+  }
+
+  cout << "Analysis finished" << endl;
+
+  store.release();
+
+  // open storage file
+  store.open("template.xml", FileStorage::READ);
+
+  // iterate over images found in testing or novelty directory
+  for (auto testFile : fileNamesInDir2) {
     matchesCount.clear();
 
-    // iterate over images found in training directory
-    for (auto testFile : fileNamesInDir1) {
+    cout << endl << "Analyzing file: " << testFile << endl;
+    Mat testImage = imread(testFile.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
 
-      Mat testImage = imread(testFile.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
-      detector.detect(image, keypoints_1);
-      detector.detect(testImage, keypoints_2);
+    detector.detect(testImage, keypoints_1);
+    extractor.compute(testImage, keypoints_1, descriptors_1);
 
-      // calculate descriptors (feature vectors)
-      SurfDescriptorExtractor extractor;
+    // compare against every image from dir1
+    for (size_t i=1; i<= fileNamesInDir1.size(); i++) {
+      ostringstream inputName;
+      inputName << "descriptors_" << i;
+      store[inputName.str()] >>  descriptors_2;
 
-      Mat descriptors_1, descriptors_2;
-
-      extractor.compute(image, keypoints_1, descriptors_1);
-      extractor.compute(testImage, keypoints_2, descriptors_2);
-
+      cout << "Matching against " << inputName.str() << endl;
       // match descriptor vectors using FLANN matcher
       FlannBasedMatcher matcher;
       vector< vector<DMatch> > matches;
+
+      cout << "DESCRIPTOR 1 ROWS " << descriptors_1.rows << endl;
+      cout << "DESCRIPTOR 2 ROWS " << descriptors_2.rows << endl;
       matcher.knnMatch(descriptors_1, descriptors_2, matches, 2);
 
       // max and min distance between keypoints
@@ -98,23 +126,20 @@ int main( int argc, char** argv )
         if( dist > max_dist ) max_dist = dist;
       }
 
-      vector<DMatch> good_matches;
+      vector<DMatch> goodMatches;
 
       for(int i = 0; i < descriptors_1.rows; i++) {
         const DMatch &m1 = matches[i][0];
         const DMatch &m2 = matches[i][1];
 
         if (m1.distance <= DIST_COEFF * m2.distance) {
-          good_matches.push_back(m1);
+          goodMatches.push_back(m1);
         }
       }
 
-      matchesCount.push_back(good_matches.size());
+      cout << goodMatches.size() << endl;
+      matchesCount.push_back(goodMatches.size());
     }
-
-    // calculate smallest and largest number of matches
-    int smallestNumOfMatches = *min_element(matchesCount.begin(), matchesCount.end());
-    int largestNumOfMatches = *max_element(matchesCount.begin(), matchesCount.end());
 
     // display all matches
     cout << "[";
@@ -126,6 +151,11 @@ int main( int argc, char** argv )
     }
     cout << "]" << endl;
 
+    // calculate smallest and largest number of matches
+    int smallestNumOfMatches = *min_element(matchesCount.begin(), matchesCount.end());
+    int largestNumOfMatches = *max_element(matchesCount.begin(), matchesCount.end());
+
+
     // display smallest and largest number of matches
     cout << "Smallest number of matches: " << smallestNumOfMatches << endl;
     cout << "Largest number of matches: " << largestNumOfMatches << endl;
@@ -134,7 +164,7 @@ int main( int argc, char** argv )
     Mat1b mask1, mask2;
     Mat3b hsv;
 
-    Mat3b imageBgr = imread(file.c_str());
+    Mat3b imageBgr = imread(testFile.c_str());
     cvtColor(imageBgr, hsv, COLOR_BGR2HSV);
 
     // determine range of redness
@@ -146,7 +176,6 @@ int main( int argc, char** argv )
     // find nonzero pixels
     findNonZero(mask, nonBlackPixels);
 
-    cout << "Largest number of matches: " << largestNumOfMatches << endl;
     cout << "Amount of nonBlackPixels: " << nonBlackPixels.size() << endl;
 
     if (largestNumOfMatches >= ACCEPTABLE_MATCH &&
@@ -155,9 +184,9 @@ int main( int argc, char** argv )
 
       matchingPhotosCount++;
     }
-
-    cout << "Photos matching: " << matchingPhotosCount << "/" << fileNamesInDir2.size() << endl;
   }
+
+  store.release();
 
   cout << "Total photos matching: " << matchingPhotosCount << "/" << fileNamesInDir2.size() << endl;
 
