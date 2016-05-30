@@ -2,6 +2,7 @@
 # include <string>
 # include <vector>
 # include <sstream>
+# include <fstream>
 
 # include "opencv2/opencv_modules.hpp"
 # include "opencv2/core/core.hpp"
@@ -26,6 +27,7 @@ const double DIST_COEFF = 0.7;
 const int NON_BLACK_MAX = 3562;
 const int NON_BLACK_MIN = 85;
 
+
 int main( int argc, char** argv )
 {
   // check arguments
@@ -33,6 +35,12 @@ int main( int argc, char** argv )
     cerr << "You should give 2 directories" << endl;
     exit (-1);
   }
+
+  // file containing responses
+  ofstream fileWithResponses;
+
+  // name of picture
+  string nameOfPicture;
 
   // load files from training and (testing or novelty) directory
   vector<string> fileNamesInDir1, fileNamesInDir2;
@@ -89,6 +97,7 @@ int main( int argc, char** argv )
 
   // open storage file
   store.open("template.xml", FileStorage::READ);
+  fileWithResponses.open("responses.txt");
 
   // iterate over images found in testing or novelty directory
   for (auto testFile : fileNamesInDir2) {
@@ -155,7 +164,6 @@ int main( int argc, char** argv )
     int smallestNumOfMatches = *min_element(matchesCount.begin(), matchesCount.end());
     int largestNumOfMatches = *max_element(matchesCount.begin(), matchesCount.end());
 
-
     // display smallest and largest number of matches
     cout << "Smallest number of matches: " << smallestNumOfMatches << endl;
     cout << "Largest number of matches: " << largestNumOfMatches << endl;
@@ -178,14 +186,20 @@ int main( int argc, char** argv )
 
     cout << "Amount of nonBlackPixels: " << nonBlackPixels.size() << endl;
 
+    nameOfPicture = (string)testFile.c_str();
+
     if (largestNumOfMatches >= ACCEPTABLE_MATCH &&
       (nonBlackPixels.size() >= NON_BLACK_MIN) &&
       (nonBlackPixels.size() <= NON_BLACK_MAX)) {
 
       matchingPhotosCount++;
+      fileWithResponses << nameOfPicture.substr(nameOfPicture.find_last_of("/\\") + 1) << "\t" << 0 << endl;
+    } else {
+      fileWithResponses << nameOfPicture.substr(nameOfPicture.find_last_of("/\\") + 1) << "\t" << 1 << endl;
     }
   }
 
+  fileWithResponses.close();
   store.release();
 
   cout << "Total photos matching: " << matchingPhotosCount << "/" << fileNamesInDir2.size() << endl;
