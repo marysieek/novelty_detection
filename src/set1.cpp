@@ -17,6 +17,14 @@ const char* STR_TRIANGLE = "triangle";
 const char* STR_QUAD = "quadrilateral";
 const char* STR_UNKNOWNFIG = "UNKNOWN";
 
+void sortFiles (vector<string> &names){
+        sort (names.begin(), names.end(), [](std::string s1, std::string s2) {
+                auto number1 = std::stoi(s1.substr(s1.find_last_of("/") + 1, s1.find_last_of(".")));
+                auto number2 = std::stoi(s2.substr(s2.find_last_of("/") + 1, s2.find_last_of(".")));
+                return number1 < number2;
+        });
+}
+
 int main (int argc, char** argv) {
 
         // check argument
@@ -30,7 +38,9 @@ int main (int argc, char** argv) {
         glob((string(argv[1]) + "/*.jpg"), fileNames, false);
         auto numberOfFiles = fileNames.size();
 
-        cout << "Found " << numberOfFiles << " files in " << argv[1] << endl;
+        sortFiles(fileNames);
+
+        // cout << "Found " << numberOfFiles << " files in " << argv[1] << endl;
 
         // counters
         unsigned quadsFound = 0;
@@ -39,7 +49,7 @@ int main (int argc, char** argv) {
 
         // analyze images
         for (auto file : fileNames) {
-                cout << endl << "Analyzing file: " << file << endl;
+                // cout << endl << "Analyzing file: " << file << endl;
                 Mat image = imread(file.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
 
                 // invert image
@@ -50,11 +60,11 @@ int main (int argc, char** argv) {
                 findContours (image, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
 
                 if (contours.size() < 1) {
-                        cout << "No contours found - skipping" << endl;
+                        // cout << "No contours found - skipping" << endl;
                         break;
                 }
 
-                cout << "\tFound " << contours.size() << (contours.size() == 1 ? " contour" : " contours - WARNING: there should be only one contour per image") << endl;
+                // cout << "\tFound " << contours.size() << (contours.size() == 1 ? " contour" : " contours - WARNING: there should be only one contour per image") << endl;
 
                 // counting edges
                 vector<Point> polygon (contours.size());
@@ -62,31 +72,34 @@ int main (int argc, char** argv) {
 
                 auto numberOfSides = polygon.size();
 
+                auto fileNameOnly = file.substr(file.find_last_of('/')+1);
+                cout << fileNameOnly << "\t" << (int) (!(numberOfSides == 3 or numberOfSides == 4)) << endl;
+
                 // get figure type
-                string figureName = "";
-                switch (numberOfSides) {
-                case 3:
-                        figureName = STR_TRIANGLE;
-                        ++trianglesFound;
-                        break;
-                case 4:
-                        figureName = STR_QUAD;
-                        ++quadsFound;
-                        break;
-                default:
-                        figureName = STR_UNKNOWNFIG;
-                        ++unknownsFound;
-
-                }
-
-                cout << "\tShape found: " << figureName << endl;
+                // string figureName = "";
+                // switch (numberOfSides) {
+                // case 3:
+                //         figureName = STR_TRIANGLE;
+                //         ++trianglesFound;
+                //         break;
+                // case 4:
+                //         figureName = STR_QUAD;
+                //         ++quadsFound;
+                //         break;
+                // default:
+                //         figureName = STR_UNKNOWNFIG;
+                //         ++unknownsFound;
+                //
+                // }
+                //
+                // cout << "\tShape found: " << figureName << endl;
         }
 
-        cout << endl << "Statistics: " << endl;
-        cout << "\tTotal images: " << numberOfFiles << endl;
-        cout << "\tTriangles:    " << trianglesFound << endl;
-        cout << "\tQuads:        " << quadsFound << endl;
-        cout << "\tUnknowns:     " << unknownsFound << endl;
+        // cout << endl << "Statistics: " << endl;
+        // cout << "\tTotal images: " << numberOfFiles << endl;
+        // cout << "\tTriangles:    " << trianglesFound << endl;
+        // cout << "\tQuads:        " << quadsFound << endl;
+        // cout << "\tUnknowns:     " << unknownsFound << endl;
 
         exit (0);
 }
